@@ -86,3 +86,6 @@ Contributions are welcome! Please open an issue or submit a pull request for any
 
 ### Disclaimer
 This honeypot is intended for educational and research purposes only. Use it responsibly and ensure you have permission to monitor the network interface you are using.
+
+# Author
+Andrew Razuvaev - [GitHub](https://github.com/posixfan) | <posixfan87@yandex.ru>
