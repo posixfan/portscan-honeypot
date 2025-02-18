@@ -25,6 +25,8 @@ parser.add_argument('--email', action='store_true',
                     help='Sending email notifications.')
 parser.add_argument('--telegram', action='store_true',
                     help='Sending telegram notifications.')
+parser.add_argument('--ignore', type=str, default='',
+                    help='IP address to ignore during port scanning detection.')
 args = parser.parse_args()
 
 # Dictionary to store SYN packets information for each IP
@@ -76,7 +78,7 @@ def send_telegram(line):
 
 def log_message(message):
     """Log a message to the console and optionally to a file."""
-    print(f'\033[31m[-]\033[0m {message}')
+    print(f'\033[31m[!]\033[0m {message}')
     if args.logging:
         with open(LOG_FILE, 'a') as log_file:
             log_file.write(f'{message}\n')
@@ -93,6 +95,11 @@ def packet_callback(packet):
         # Check if the SYN flag is set
         if tcp_layer.flags == 'S':
             src_ip = ip_layer.src
+
+            # Skip if the IP is in the ignore list
+            if src_ip == args.ignore:
+                return
+
             dst_port = tcp_layer.dport
 
             # Add the port to the set for this IP
