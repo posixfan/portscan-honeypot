@@ -1,14 +1,14 @@
 # Portscan Honeypot
 
-A simple TCP honeypot designed to detect and log port scanning activities. This honeypot listens on a specified network interface, captures TCP SYN packets, and identifies potential port scanning attempts. It can send email and Telegram notifications when suspicious activity is detected.
+This script is a simple TCP/UDP port scanner honeypot that detects port scanning activity on a specified network interface. It can send notifications about detected scans via email or Telegram.
 
 ## Features
 
-- **Port Scanning Detection**: Detects when an IP address scans more than 2 different ports.
-- **Logging**: Logs detected activities to a file (`honeypot.log`) if enabled.
-- **Email Notifications**: Sends email alerts when port scanning is detected (optional).
-- **Telegram Notifications**: Sends Telegram messages when port scanning is detected (optional).
-- **Root Privileges**: Requires root privileges to run, ensuring it can capture packets on the specified interface.
+- Detection of TCP and UDP port scanning.
+- Optional logging of events to a file.
+- Sending notifications via email or Telegram (optional).
+- Ability to ignore specific IP addresses.
+- Notifications are sent once every 30 seconds for each detected scan.
 
 ## Prerequisites
 
@@ -40,10 +40,14 @@ sudo python3 portscan-honeypot.py <interface> [--logging] [--email] [--telegram]
 - `--telegram`: Enable Telegram notifications.
 - `--ignore`: IP address to ignore during port scanning detection.
 ### Example
+This command will start the honeypot on the `eth0` interface, enable logging, and send email notifications when port scanning is detected.
 ```bash
 sudo python3 portscan-honeypot.py eth0 --logging --email
 ```
-This command will start the honeypot on the `eth0` interface, enable logging, and send email notifications when port scanning is detected.
+Ignore a specific IP address:
+```bash
+sudo python3 portscan_honeypot.py eth0 --ignore 192.168.1.100
+```
 ## Configuration
 ### Email Notifications
 To enable email notifications, modify the send_email function with your SMTP server details, login credentials, and recipient email address.
