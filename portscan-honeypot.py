@@ -26,7 +26,9 @@ parser.add_argument('--email', action='store_true',
 parser.add_argument('--telegram', action='store_true',
                     help='Sending telegram notifications.')
 parser.add_argument('--ignore', type=str, default='',
-                    help='IP address to ignore during port scanning detection.')
+                    help='IP address(es) to ignore during port scanning detection (comma-separated).')
+parser.add_argument('--udp', action='store_true',
+                    help='Enable UDP port scanning detection.')
 args = parser.parse_args()
 
 # Dictionary to store SYN packets information for each IP
@@ -43,6 +45,11 @@ last_report_time = time.time()
 
 # Log file name
 LOG_FILE = 'honeypot.log'
+
+# List of UDP ports to ignore
+IGNORED_UDP_PORTS = {1900, 5353} #SSDP,mDNS
+# Adding a range of dynamic ports 49152-65535
+IGNORED_UDP_PORTS.update(range(49152, 65536))
 
 def is_running_as_root():
     """Check if the script is running with root privileges."""
@@ -93,7 +100,7 @@ def packet_callback(packet):
         src_ip = ip_layer.src
 
         # Skip if the IP is in the ignore list
-        if src_ip == args.ignore:
+        if src_ip in args.ignore.split(','):
             return
 
         # Check if the packet contains TCP layer
@@ -117,10 +124,14 @@ def packet_callback(packet):
                     if src_ip not in ip_detection_time:
                         ip_detection_time[src_ip] = datetime.now().strftime('%d.%m.%Y %H:%M:%S')
 
-        # Check if the packet contains UDP layer
-        elif packet.haslayer(UDP):
+        # Check if the packet contains UDP layer and UDP scanning is enabled
+        elif args.udp and packet.haslayer(UDP):
             udp_layer = packet.getlayer(UDP)
             dst_port = udp_layer.dport
+
+            # Skip if the port is in the ignored UDP ports list
+            if dst_port in IGNORED_UDP_PORTS:
+                return
 
             # Add the port to the set for this IP
             ip_port_map[src_ip]['udp'].add(dst_port)
