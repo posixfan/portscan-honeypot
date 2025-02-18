@@ -14,10 +14,10 @@ from os import getuid
 # Third-party library imports
 from requests import post
 from scapy.all import sniff
-from scapy.layers.inet import IP, TCP
+from scapy.layers.inet import IP, TCP, UDP
 
 # Argument parser setup
-parser = argparse.ArgumentParser(description='Multithreaded TCP scanner honeypot')
+parser = argparse.ArgumentParser(description='Multithreaded TCP/UDP scanner honeypot')
 parser.add_argument('iface', type=str, help='The network interface to listen on.')
 parser.add_argument('--logging', action='store_true',
                     help='Enable logging to a file (honeypot.log).')
@@ -30,7 +30,7 @@ parser.add_argument('--ignore', type=str, default='',
 args = parser.parse_args()
 
 # Dictionary to store SYN packets information for each IP
-ip_port_map = defaultdict(set)
+ip_port_map = defaultdict(lambda: {'tcp': set(), 'udp': set()})
 
 # Dictionary to store the first detection time for each IP
 ip_detection_time = {}
@@ -87,30 +87,50 @@ def packet_callback(packet):
     """Callback function to process each captured packet."""
     global start_time, last_report_time
 
-    # Check if the packet contains TCP and IP layers
-    if packet.haslayer(TCP) and packet.haslayer(IP):
-        tcp_layer = packet.getlayer(TCP)
+    # Check if the packet contains IP layer
+    if packet.haslayer(IP):
         ip_layer = packet.getlayer(IP)
+        src_ip = ip_layer.src
 
-        # Check if the SYN flag is set
-        if tcp_layer.flags == 'S':
-            src_ip = ip_layer.src
+        # Skip if the IP is in the ignore list
+        if src_ip == args.ignore:
+            return
 
-            # Skip if the IP is in the ignore list
-            if src_ip == args.ignore:
-                return
+        # Check if the packet contains TCP layer
+        if packet.haslayer(TCP):
+            tcp_layer = packet.getlayer(TCP)
 
-            dst_port = tcp_layer.dport
+            # Check if the SYN flag is set
+            if tcp_layer.flags == 'S':
+                dst_port = tcp_layer.dport
+
+                # Add the port to the set for this IP
+                ip_port_map[src_ip]['tcp'].add(dst_port)
+
+                # Reset data if more than 2 seconds have passed
+                if time.time() - start_time > 2:
+                    start_time = time.time()
+
+                # If more than 2 different ports are scanned from the same IP
+                if len(ip_port_map[src_ip]['tcp']) > 2:
+                    # Record the first detection time if not already recorded
+                    if src_ip not in ip_detection_time:
+                        ip_detection_time[src_ip] = datetime.now().strftime('%d.%m.%Y %H:%M:%S')
+
+        # Check if the packet contains UDP layer
+        elif packet.haslayer(UDP):
+            udp_layer = packet.getlayer(UDP)
+            dst_port = udp_layer.dport
 
             # Add the port to the set for this IP
-            ip_port_map[src_ip].add(dst_port)
+            ip_port_map[src_ip]['udp'].add(dst_port)
 
             # Reset data if more than 2 seconds have passed
             if time.time() - start_time > 2:
                 start_time = time.time()
 
             # If more than 2 different ports are scanned from the same IP
-            if len(ip_port_map[src_ip]) > 2:
+            if len(ip_port_map[src_ip]['udp']) > 2:
                 # Record the first detection time if not already recorded
                 if src_ip not in ip_detection_time:
                     ip_detection_time[src_ip] = datetime.now().strftime('%d.%m.%Y %H:%M:%S')
@@ -127,30 +147,41 @@ def generate_report():
         return
 
     # Filter IPs with more than 2 ports scanned
-    suspicious_ips = {ip: ports for ip, ports in ip_port_map.items() if len(ports) > 2}
+    suspicious_ips = {ip: ports for ip, ports in ip_port_map.items() if len(ports['tcp']) > 2 or len(ports['udp']) > 2}
     if not suspicious_ips:
         return  # Skip if no suspicious activity is found
 
     for ip, ports in suspicious_ips.items():
+        # Check TCP ports
+        if len(ports['tcp']) > 2:
+            scan_type = 'TCP'
+            ports_set = ports['tcp']
+        # Check UDP ports
+        elif len(ports['udp']) > 2:
+            scan_type = 'UDP'
+            ports_set = ports['udp']
+        else:
+            continue
+
         # Format the list of ports
-        if len(ports) <= 10:
-            ports_str = ','.join(map(str, sorted(ports)))
+        if len(ports_set) <= 10:
+            ports_str = ','.join(map(str, sorted(ports_set)))
         else:
             # If there are many ports, show a range
-            min_port = min(ports)
-            max_port = max(ports)
+            min_port = min(ports_set)
+            max_port = max(ports_set)
             ports_str = f'{min_port}-{max_port}'
 
         # Get the first detection time
         detection_time = ip_detection_time.get(ip, 'Unknown')
-        log_message(f'[{detection_time}] Port scanning detected from {ip}. '
+        log_message(f'[{detection_time}] {scan_type} port scanning detected from {ip}. '
                     f'Ports scanned: {ports_str}')
 
         if args.email:
-            send_email(f'[{detection_time}] Port scanning detected from {ip}. '
+            send_email(f'[{detection_time}] {scan_type} port scanning detected from {ip}. '
                        f'Ports scanned: {ports_str}')
         if args.telegram:
-            send_telegram(f'[{detection_time}] Port scanning detected from {ip}. '
+            send_telegram(f'[{detection_time}] {scan_type} port scanning detected from {ip}. '
                           f'Ports scanned: {ports_str}')
 
     # Clear data after generating the report
