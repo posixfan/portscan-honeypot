@@ -34,10 +34,11 @@ Run the honeypot with the following command:
 sudo python3 portscan-honeypot.py <interface> [--logging] [--email] [--telegram]
 ```
 ### Arguments
-<interface>: The network interface to listen on (e.g., `eth0`).
+- `<interface>`: The network interface to listen on (e.g., `eth0`).
 - `--logging`: Enable logging to `honeypot.log`.
 - `--email`: Enable email notifications.
 - `--telegram`: Enable Telegram notifications.
+- `--ignore`: IP address to ignore during port scanning detection.
 ### Example
 ```bash
 sudo python3 portscan-honeypot.py eth0 --logging --email
